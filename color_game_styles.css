@@ -1,0 +1,13 @@
+#canvas{
+    background-color: black;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+}
+
+#wrapper {
+    width: 100%;
+    text-align: center;
+}
