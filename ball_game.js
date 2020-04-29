@@ -7,7 +7,14 @@ var mouseY = 0;
 var myGamePieceWidth = 20;
 var myGamePieceHeight = 20;
 
+// unit: s
+var timestep = 1;
+// unit: m
 var ballRadius = 20;
+// unit: kg
+var ballMass = 10000000000000;
+// unit: m^3 kg^-1 s^-2
+var gravConst = 0.0000000000667408;
 
 var canvas_obj = document.getElementById("canvas");
 var context_obj = canvas_obj.getContext("2d");
@@ -112,6 +119,8 @@ function nodeComponent(radius, color, x, y) {
     this.y = y;
     this.radius = radius;
     this.color = color;
+    this.xVelocity = 0;
+    this.yVelocity = 0;
 
     var innerRad = 6;
     var outerRad = 20;
@@ -231,62 +240,52 @@ function moveBubbles(){
 
                 var angle = Math.abs(Math.atan(y_diff/x_diff));
                 var total_radius = Math.sqrt(Math.pow(x_diff,2)+Math.pow(y_diff,2));
-                
-                var force = 1/Math.pow(total_radius,2);
+                // M * (m/s^2) = (m^3 / (M * s^2)) * (M^2 / m^2))     
+                var grav_force = gravConst * ((ballMass * ballMass)/Math.pow(total_radius,2));
 
-                total_force.x += Math.sign(x_diff)*force*Math.cos(angle);
-                total_force.y += Math.sign(y_diff)*force*Math.sin(angle);
+                total_force.x += Math.sign(x_diff)*grav_force*Math.cos(angle);
+                total_force.y += Math.sign(y_diff)*grav_force*Math.sin(angle);
             }
         }
         
-        
-        if (Math.abs(total_force.x) > 0.00001){ // Move x
-            if(!touchingAnotherNode(key1)){
-                key1.x += total_force.x*1000;
-            } else { // key1 is touching another node
-                if(nodeMap.get(key1).length <= 1 && nodeMap.size>2){
-                    key1.color = 'LightCoral'
-                    //make vector from this node to middle of touching node
-                    var otherNode = nodeMap.get(key1)[0];
-                    var vect_y= ( otherNode.y - key1.y);
-                    var vect_x = (otherNode.x - key1.x);
-                    var cw_vector = new force_vector();
-                    cw_vector.x = vect_y;
-                    cw_vector.y = -1*vect_x;
-                    var ccw_vector = new force_vector();
-                    ccw_vector.x = -1*vect_y;
-                    ccw_vector.y = vect_x;
+        // calculate new velocity
+        key1.xVelocity += (total_force.x / ballMass) * timestep;
+        key1.yVelocity += (total_force.y / ballMass) * timestep;
 
-                    //find distance between cw and force
-                    var x_diff_cw = total_force.x - cw_vector.x;
-                    var y_diff_cw = total_force.y - cw_vector.y;
-                    var dist_cw = Math.sqrt(Math.pow(x_diff_cw,2) + Math.pow(y_diff_cw,2));
+        // detect ball collisons
+        if (touchingAnotherNode(key1)) {
+            key1.color = 'LightCoral'
+            //make vector from this node to middle of touching node
+            var otherNode = nodeMap.get(key1)[0];
+            var vect_y = (otherNode.y - key1.y);
+            var vect_x = (otherNode.x - key1.x);
+            var vect_total = vect_y + vect_x;
+            // So... let's make these collisions perfectly elastic 
+            // that allows us to conserve velocity.
+            // taking advantage of v1i + v1f = v2i + v2f
+            // later we can add unique masses for each ball.
+            var x_momentum = ballMass * key1.xVelocity;
+            var other_x_momentum = ballMass * otherNode.xVelocity;
+            var total_x_momentum = x_momentum + other_x_momentum;
+            var total_mass = ballMass + ballMass;
+            var x_velocity_diff = otherNode.xVelocity - key1.xVelocity;
+            otherNode.xVelocity  = (total_x_momentum 
+                                    - (x_velocity_diff * ballMass)) / total_mass;
+            key1.xVelocity = otherNode.xVelocity + x_velocity_diff;             
 
-                    //find distance between ccw and force
-                    var x_diff_ccw = total_force.x - ccw_vector.x;
-                    var y_diff_ccw = total_force.y - ccw_vector.y;
-                    var dist_ccw = Math.sqrt(Math.pow(x_diff_ccw,2) + Math.pow(y_diff_ccw,2));
-                    
-                    // move to either cw or ccw
-                    if(dist_cw < dist_ccw){ //cw is closer to force vector
-                        key1.x += Math.sign(cw_vector.x);
-                        key1.y += Math.sign(cw_vector.y);
-                    } else { //ccw is closer to force vector
-                        key1.x += Math.sign(ccw_vector.x);
-                        key1.y += Math.sign(ccw_vector.y);
-                    }
-                } else {
-                    key1.color = 'DeepPink';
-                }
-            }
+            var y_momentum = ballMass * key1.yVelocity;
+            var other_y_momentum = ballMass * otherNode.yVelocity;
+            var total_y_momentum = y_momentum + other_y_momentum;
+            var total_mass = ballMass + ballMass;
+            var y_velocity_diff = otherNode.yVelocity - key1.yVelocity;
+            otherNode.yVelocity = (total_y_momentum 
+                                    - (y_velocity_diff * ballMass)) / total_mass;
+            key1.yVelocity = otherNode.yVelocity + y_velocity_diff;             
         }
 
-
-        if (Math.abs(total_force.y) > 0.00001){ // Move y
-            if(!touchingAnotherNode(key1)){
-                key1.y += total_force.y*1000;
-            }
-        }
+        // move to new location
+        key1.x += key1.xVelocity * timestep;
+        key1.y += key1.yVelocity * timestep;
 
         key1.update();
 
